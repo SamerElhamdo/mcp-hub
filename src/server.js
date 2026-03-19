@@ -25,8 +25,8 @@ import { DbConfigManager } from "./utils/db-config.js";
 const SERVER_ID = "mcp-hub";
 
 // Auth: paths that skip UI token check
-const UI_AUTH_SKIP_PATHS = ["/mcp", "/messages", "/api/health", "/api/oauth/callback"];
-const MCP_PATHS = ["/mcp", "/messages"];
+const UI_AUTH_SKIP_PATHS = ["/mcp", "/sse", "/messages", "/api/health", "/api/oauth/callback"];
+const MCP_PATHS = ["/mcp", "/sse", "/messages"];
 
 function validateToken(req, token) {
   const authHeader = req.headers.authorization;
@@ -75,6 +75,17 @@ function authMiddleware(req, res, next) {
 // Create Express app
 const app = express();
 app.use(express.json());
+
+// CORS for MCP endpoint - some clients need this
+app.use((req, res, next) => {
+  if (["/mcp", "/sse", "/messages"].includes(req.path)) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-MCP-Host-Token, X-MCP-Hub-Token");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+  }
+  next();
+});
 
 // Protect UI and API when MCP_HUB_UI_TOKEN is set
 app.use(authMiddleware);
@@ -410,8 +421,8 @@ registerRoute("GET", "/events", "Subscribe to server events", async (req, res) =
   }
 });
 
-// Register MCP SSE endpoint
-app.get("/mcp", async (req, res) => {
+// Register MCP SSE endpoint (/mcp and /sse for clients that expect either)
+app.get(["/mcp", "/sse"], async (req, res) => {
   try {
     if (!mcpServerEndpoint) {
       throw new ServerError("MCP server endpoint not initialized");

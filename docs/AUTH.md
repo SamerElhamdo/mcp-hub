@@ -43,6 +43,43 @@
 
 ---
 
+## استخدام التوكن في الرابط (?token=xxx)
+
+بعض العملاء (مثل **Cloud Code**، VS Code للويب، أو بيئات سحابية أخرى) **لا تدعم تمرير headers** في إعداد MCP. استخدم التوكن في الرابط مباشرة:
+
+```json
+{
+  "mcpServers": {
+    "Hub": {
+      "url": "https://your-hub.example.com/mcp?token=YOUR_MCP_HOST_TOKEN"
+    }
+  }
+}
+```
+
+أو بصيغة URL فقط:
+```
+https://your-hub.example.com/mcp?token=YOUR_MCP_HOST_TOKEN
+```
+
+**ملاحظة:** إذا كان عميلك يدعم `headers` (مثل Cursor أو Claude Desktop)، يُفضّل استخدام headers بدلاً من التوكن في الرابط لأسباب أمنية.
+
+---
+
+## استكشاف الأخطاء: "Couldn't reach the MCP server"
+
+1. **تأكد من التوكن**:
+   - إذا كان العميل يدعم headers: `"headers": { "Authorization": "Bearer YOUR_TOKEN" }`
+   - إذا كان العميل لا يدعم headers (Cloud Code، إلخ): أضف التوكن في الرابط: `"url": "https://.../mcp?token=YOUR_TOKEN"`
+
+2. **تحقق من الرابط**: جرّب فتح `https://mcp.whatsnow.io/api/health` في المتصفح — يجب أن يعيد JSON.
+
+3. **SSL/الشبكة**: تأكد أن الشهادة صالحة وأن السيرفر يعمل.
+
+4. **CORS**: تم تفعيل CORS على `/mcp` و `/messages` تلقائياً.
+
+---
+
 ## مفاتيح خوادم MCP (dokploy-mcp، إلخ)
 
 **لا تحتاج لتمرير مفاتيح المصادقة يدوياً عند استخدام MCP.**
