@@ -39,6 +39,7 @@ const UI_AUTH_SKIP_PATHS = [
   "/.well-known/oauth-authorization-server",
   "/oauth/authorize",
   "/oauth/token",
+  "/authorize", "/token", "/register",
 ];
 const MCP_PATHS = ["/mcp", "/sse", "/messages"];
 
@@ -101,7 +102,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // CORS for MCP and OAuth endpoints
-const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known"];
+const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known", "/authorize", "/token", "/register"];
 app.use((req, res, next) => {
   if (CORS_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -143,26 +144,41 @@ app.get("/oauth/authorize", (req, res) => {
   res.redirect(302, url.toString());
 });
 
-app.post("/oauth/token", (req, res) => {
+// Claude.ai workaround: ignores metadata and hits /authorize, /token, /register at root
+// See: https://github.com/anthropics/claude-ai-mcp/issues/82
+app.get("/authorize", (req, res) => {
+  const base = getBaseUrl(req);
+  const qs = new URLSearchParams(req.query).toString();
+  res.redirect(302, `${base}/oauth/authorize${qs ? `?${qs}` : ""}`);
+});
+
+const handleTokenExchange = (req, res) => {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   if (!mcpHostToken) return res.status(404).end();
-
   const body = req.body || {};
   const { grant_type, code, code_verifier, redirect_uri } = { ...body, ...req.query };
   if (grant_type !== "authorization_code" || !code || !code_verifier || !redirect_uri) {
     return res.status(400).json({ error: "invalid_request", error_description: "grant_type, code, code_verifier, redirect_uri required" });
   }
-
   const accessToken = exchangeCodeForToken(code, code_verifier, redirect_uri, mcpHostToken);
   if (!accessToken) {
     logger.debug("OAuth token exchange failed", { code: !!code, hasVerifier: !!code_verifier });
     return res.status(400).json({ error: "invalid_grant", error_description: "Invalid or expired authorization code" });
   }
+  res.json({ access_token: accessToken, token_type: "bearer", expires_in: 3600 });
+};
+app.post("/oauth/token", handleTokenExchange);
+app.post("/token", handleTokenExchange);
 
-  res.json({
-    access_token: accessToken,
-    token_type: "bearer",
-    expires_in: 3600,
+// Minimal DCR for Claude.ai (returns client_id for public client)
+app.post("/register", (req, res) => {
+  if (!process.env.MCP_HOST_TOKEN) return res.status(404).end();
+  const body = req.body || {};
+  const clientId = `mcp-hub-${Math.random().toString(36).slice(2, 12)}`;
+  res.status(201).json({
+    client_id: clientId,
+    client_secret_expires_at: 0,
+    redirect_uris: body.redirect_uris || [],
   });
 });
 

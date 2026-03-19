@@ -116,9 +116,11 @@ export function getAuthorizationServerMetadata(baseUrl) {
     issuer: base,
     authorization_endpoint: `${base}/oauth/authorize`,
     token_endpoint: `${base}/oauth/token`,
+    registration_endpoint: `${base}/register`,
     response_types_supported: ["code"],
     code_challenge_methods_supported: ["S256"],
     grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["none"],
   };
 }
 
