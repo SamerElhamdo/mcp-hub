@@ -98,6 +98,7 @@ function authMiddleware(req, res, next) {
 // Create Express app
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // CORS for MCP and OAuth endpoints
 const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known"];
@@ -142,17 +143,19 @@ app.get("/oauth/authorize", (req, res) => {
   res.redirect(302, url.toString());
 });
 
-app.post("/oauth/token", express.urlencoded({ extended: true }), (req, res) => {
+app.post("/oauth/token", (req, res) => {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   if (!mcpHostToken) return res.status(404).end();
 
-  const { grant_type, code, code_verifier, redirect_uri } = req.body || req.query || {};
+  const body = req.body || {};
+  const { grant_type, code, code_verifier, redirect_uri } = { ...body, ...req.query };
   if (grant_type !== "authorization_code" || !code || !code_verifier || !redirect_uri) {
     return res.status(400).json({ error: "invalid_request", error_description: "grant_type, code, code_verifier, redirect_uri required" });
   }
 
   const accessToken = exchangeCodeForToken(code, code_verifier, redirect_uri, mcpHostToken);
   if (!accessToken) {
+    logger.debug("OAuth token exchange failed", { code: !!code, hasVerifier: !!code_verifier });
     return res.status(400).json({ error: "invalid_grant", error_description: "Invalid or expired authorization code" });
   }
 

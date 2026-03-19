@@ -7,9 +7,10 @@
 import crypto from "crypto";
 import logger from "./logger.js";
 
-const ALLOWED_REDIRECT_URIS = [
-  "https://claude.ai/api/mcp/auth_callback",
-  "https://claude.com/api/mcp/auth_callback",
+// Claude.ai callback patterns - accept exact and subdomains
+const ALLOWED_REDIRECT_PATTERNS = [
+  /^https:\/\/([a-z0-9-]+\.)?claude\.ai(\/.*)?$/,
+  /^https:\/\/([a-z0-9-]+\.)?claude\.com(\/.*)?$/,
 ];
 
 // In-memory auth codes: { code -> { challenge, redirectUri, expiresAt } }
@@ -40,6 +41,20 @@ export function createAuthCode(codeChallenge, codeChallengeMethod, redirectUri, 
 }
 
 /**
+ * Normalize redirect_uri for consistent comparison (handles encoding differences)
+ */
+function normalizeRedirectUri(uri) {
+  if (!uri || typeof uri !== "string") return "";
+  try {
+    const u = new URL(uri);
+    u.searchParams.sort();
+    return u.toString();
+  } catch {
+    return uri;
+  }
+}
+
+/**
  * Exchange authorization code for access token (MCP_HOST_TOKEN)
  */
 export function exchangeCodeForToken(code, codeVerifier, redirectUri, mcpHostToken) {
@@ -48,10 +63,13 @@ export function exchangeCodeForToken(code, codeVerifier, redirectUri, mcpHostTok
   authCodes.delete(code);
 
   if (Date.now() > stored.expiresAt) return null;
-  if (redirectUri !== stored.redirectUri) return null;
+
+  const normalizedStored = normalizeRedirectUri(stored.redirectUri);
+  const normalizedIncoming = normalizeRedirectUri(redirectUri);
+  if (normalizedStored !== normalizedIncoming) return null;
 
   const expectedChallenge =
-    stored.codeChallengeMethod === "S256"
+    (stored.codeChallengeMethod || "S256") === "S256"
       ? sha256Base64Url(codeVerifier)
       : codeVerifier;
   if (expectedChallenge !== stored.codeChallenge) return null;
@@ -60,10 +78,11 @@ export function exchangeCodeForToken(code, codeVerifier, redirectUri, mcpHostTok
 }
 
 /**
- * Validate redirect_uri against allowlist
+ * Validate redirect_uri against allowlist (Claude.ai, Claude.com, subdomains)
  */
 export function isRedirectUriAllowed(uri) {
-  return ALLOWED_REDIRECT_URIS.some((allowed) => uri === allowed || uri?.startsWith(allowed + "?"));
+  if (!uri || typeof uri !== "string") return false;
+  return ALLOWED_REDIRECT_PATTERNS.some((pattern) => pattern.test(uri));
 }
 
 /**
@@ -103,4 +122,3 @@ export function getAuthorizationServerMetadata(baseUrl) {
   };
 }
 
-export { ALLOWED_REDIRECT_URIS };
