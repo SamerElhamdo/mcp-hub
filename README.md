@@ -81,7 +81,7 @@ Claude.ai uses OAuth 2.0—no manual token entry. Add a custom connector:
 3. **Remote MCP server URL:** `https://your-domain.com/mcp`
 4. Click **Add** then **Connect**
 
-OAuth completes automatically (redirect in browser). You never enter the token—it lives on the server; the OAuth flow lets Claude obtain it after you click Connect. Optional: set `MCP_OAUTH_APPROVAL_PASSWORD` to require a password before completing the connection (share it only with trusted users). Ensure `MCP_HOST_TOKEN` and `MCP_HUB_PUBLIC_URL` are set on the server. See [docs/AUTH.md](docs/AUTH.md).
+OAuth completes automatically (redirect in browser). You never enter the token—it lives on the server; the OAuth flow lets Claude obtain it after you click Connect. Optional: set `MCP_OAUTH_APPROVAL_PASSWORD` to require a password before completing the connection (share it only with trusted users). ✓ Tested. Ensure `MCP_HOST_TOKEN` and `MCP_HUB_PUBLIC_URL` are set on the server. See [docs/AUTH.md](docs/AUTH.md).
 
 The Hub automatically:
 - Namespaces capabilities to prevent conflicts (e.g., `filesystem__search` vs `database__search`)

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **OAuth Approval Password** (`MCP_OAUTH_APPROVAL_PASSWORD`): Optional password gate for Claude.ai OAuth connections
+  - When set, users must enter the password before completing the OAuth flow
+  - Restricts connector access to those who know the approval password
+  - Documented in `docs/AUTH.md`, `.env.example`, and `docker-compose.yml`
+
 ## [4.2.1] - 2025-08-22
 
 ### Fixed
