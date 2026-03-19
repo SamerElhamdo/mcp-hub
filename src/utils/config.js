@@ -132,6 +132,36 @@ export class ConfigManager extends EventEmitter {
     }
   }
 
+  /**
+   * Save config to the first config file path.
+   * Only works when config was loaded from file(s).
+   * @param {Object} config - Config object to save (must have mcpServers)
+   * @throws {ConfigError} When no config paths or invalid config
+   */
+  async saveConfig(config) {
+    if (!this.configPaths || this.configPaths.length === 0) {
+      throw new ConfigError("Cannot save config: no config file path specified");
+    }
+    if (!config || typeof config.mcpServers !== "object") {
+      throw new ConfigError("Invalid config: mcpServers must be an object");
+    }
+
+    // Clean server configs (remove internal keys like config_source)
+    const cleanServers = {};
+    for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
+      const { config_source, type, ...clean } = serverConfig;
+      cleanServers[name] = clean;
+    }
+
+    const configPath = this.configPaths[0];
+    const content = JSON.stringify({ mcpServers: cleanServers }, null, 2);
+
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(configPath, content, "utf-8");
+    await this.updateConfig({ ...this.config, mcpServers: config.mcpServers });
+    logger.info(`Config saved to ${configPath}`);
+  }
+
   async loadConfig() {
     if (!this.configPaths || this.configPaths.length === 0) {
       throw new ConfigError("No config paths specified");

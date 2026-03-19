@@ -10,13 +10,13 @@ import {
 import EventEmitter from "events";
 
 export class MCPHub extends EventEmitter {
-  constructor(configPathOrObject, { port, watch = false, marketplace } = {}) {
+  constructor(configPathOrObject, { port, watch = false, marketplace, configManager } = {}) {
     super();
     this.connections = new Map();
     this.port = port;
     this.hubServerUrl = `http://localhost:${port}`;
-    this.configManager = new ConfigManager(configPathOrObject);
-    this.shouldWatchConfig = watch && (typeof configPathOrObject === "string" || Array.isArray(configPathOrObject));
+    this.configManager = configManager || new ConfigManager(configPathOrObject);
+    this.shouldWatchConfig = watch && !configManager?.useDatabase && (typeof configPathOrObject === "string" || Array.isArray(configPathOrObject));
     this.marketplace = marketplace;
   }
   async initialize(isRestarting) {

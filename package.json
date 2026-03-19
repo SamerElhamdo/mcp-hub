@@ -19,6 +19,7 @@
   ],
   "files": [
     "dist/cli.js",
+    "public",
     "LICENSE.md",
     "README.md"
   ],
@@ -62,6 +63,7 @@
     "yargs": "^17.7.2"
   },
   "dependencies": {
-    "json5": "^2.2.3"
+    "json5": "^2.2.3",
+    "pg": "^8.13.0"
   }
 }

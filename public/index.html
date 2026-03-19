@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Hub - إدارة الخوادم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-hover: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79b8ff;
+      --success: #3fb950;
+      --error: #f85149;
+      --warning: #d29922;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans Arabic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 920px; margin: 0 auto; padding: 1.5rem; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius);
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .badge-success { background: rgba(63, 185, 80, 0.15); color: var(--success); }
+    .badge-error { background: rgba(248, 81, 73, 0.15); color: var(--error); }
+    .badge-warning { background: rgba(210, 153, 34, 0.15); color: var(--warning); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card h2 { font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-muted); font-weight: 500; }
+    .url-box {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: var(--bg);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.875rem;
+    }
+    .url-box input { flex: 1; background: none; border: none; color: var(--text); }
+    .url-box input:focus { outline: none; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-secondary { background: var(--surface-hover); color: var(--text); }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); }
+    .btn-danger { background: rgba(248, 81, 73, 0.2); color: var(--error); }
+    .btn-danger:hover:not(:disabled) { background: rgba(248, 81, 73, 0.3); }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .btn-icon { padding: 0.4rem; }
+    .server-list { list-style: none; }
+    .server-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 0.5rem;
+      transition: border-color 0.15s;
+    }
+    .server-item:hover { border-color: var(--text-muted); }
+    .server-info { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .server-name { font-weight: 600; }
+    .server-type { font-size: 0.7rem; color: var(--text-muted); padding: 0.15rem 0.4rem; background: var(--surface); border-radius: 4px; }
+    .server-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-group label { display: block; margin-bottom: 0.4rem; font-size: 0.85rem; color: var(--text-muted); }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+    }
+    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+    .form-group textarea { min-height: 70px; resize: vertical; }
+    .form-group small { display: block; margin-top: 0.3rem; font-size: 0.75rem; color: var(--text-muted); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+    .tabs { display: flex; gap: 0.35rem; margin-bottom: 1rem; }
+    .tab {
+      padding: 0.5rem 1rem;
+      background: var(--surface-hover);
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+      backdrop-filter: blur(4px);
+    }
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 560px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 1.1rem; }
+    .modal-body { padding: 1.25rem; }
+    .modal-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 0.5rem; }
+    .close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.4rem; padding: 0.25rem; line-height: 1; }
+    .close-btn:hover { color: var(--text); }
+    .test-result {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: var(--radius);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .test-result.success { background: rgba(63, 185, 80, 0.12); border: 1px solid rgba(63, 185, 80, 0.4); }
+    .test-result.error { background: rgba(248, 81, 73, 0.12); border: 1px solid rgba(248, 81, 73, 0.4); }
+    .env-hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .env-hint code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); }
+    .import-area {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+    .import-area:hover { border-color: var(--accent); }
+    .import-area textarea { margin-top: 1rem; min-height: 120px; }
+    .section-title { font-size: 0.8rem; color: var(--text-muted); margin: 1rem 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); }
+    .env-vars-grid { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+    .env-var-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; }
+    .env-var-row label { font-size: 0.8rem; color: var(--text-muted); }
+    .env-var-row input { margin: 0; }
+    .toast-container { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast {
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      animation: toastIn 0.3s ease;
+    }
+    .toast.success { background: var(--success); color: #fff; }
+    .toast.error { background: var(--error); color: #fff; }
+    .toast.info { background: var(--accent); color: #fff; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-overlay { position: absolute; inset: 0; background: rgba(13,17,23,0.8); display: flex; align-items: center; justify-content: center; border-radius: inherit; }
+    .expand-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8rem; padding: 0.25rem 0; }
+    .expand-btn:hover { color: var(--accent); }
+    .raw-json { font-size: 0.8rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MCP Hub</h1>
+      <span id="statusBadge" class="badge badge-success">جاري التحميل...</span>
+    </header>
+
+    <div class="card">
+      <h2>رابط الاتصال</h2>
+      <div class="url-box">
+        <input type="text" id="connectionUrl" readonly value="">
+        <button class="btn btn-primary btn-sm" onclick="copyUrl()">نسخ</button>
+      </div>
+      <p class="env-hint" style="margin-top: 0.5rem;">استخدم في Cursor أو Claude Desktop. يدعم: <code>${env:VAR}</code> و <code>${workspaceFolder}</code></p>
+      <details class="env-hint" style="margin-top:0.5rem">
+        <summary>عند استخدام MCP_HOST_TOKEN</summary>
+        <pre style="margin-top:0.5rem;font-size:0.75rem;overflow-x:auto">{
+  "url": "<span id="mcpUrlHint">...</span>",
+  "headers": { "Authorization": "Bearer YOUR_MCP_HOST_TOKEN" }
+}</pre>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>خوادم MCP</h2>
+      <p id="configPathHint" class="env-hint" style="margin-bottom:0.75rem;display:none;"></p>
+      <ul id="serverList" class="server-list"></ul>
+      <div id="emptyState" class="empty-state" style="display:none;">لا توجد خوادم. أضف خادم أو استورد إعداد MCP Studio / VS Code.</div>
+      <div id="editButtons" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="openAddModal()">+ إضافة خادم</button>
+        <button class="btn btn-secondary" onclick="openImportModal()">استيراد JSON</button>
+      </div>
+      <p id="noEditWarning" class="env-hint" style="margin-top:0.5rem;color:var(--warning);display:none;">التعديل غير متاح: شغّل mcp-hub مع --config path/to/file.json</p>
+    </div>
+
+    <div class="card">
+      <h2>اختبار أداة</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>الخادم</label>
+          <select id="testServer" style="width:100%;padding:0.6rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);">
+            <option value="">-- اختر --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>الأداة</label>
+          <select id="testTool" style="width:100%;padding:0.6rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);">
+            <option value="">-- اختر --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>المعاملات (JSON)</label>
+        <textarea id="testArgs" placeholder='{"key": "value"}'></textarea>
+      </div>
+      <button class="btn btn-primary" id="testBtn" onclick="runTest()">تشغيل الاختبار</button>
+      <div id="testResult"></div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Server Modal -->
+  <div id="serverModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">إضافة خادم</h2>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab active" data-tab="stdio">STDIO</button>
+          <button class="tab" data-tab="remote">بعيد (URL)</button>
+        </div>
+        <div id="tabStdio" class="tab-content active">
+          <div class="form-group">
+            <label>اسم الخادم</label>
+            <input type="text" id="serverName" placeholder="dokploy-mcp">
+          </div>
+          <div class="form-group">
+            <label>الأمر</label>
+            <input type="text" id="serverCommand" placeholder="npx" value="npx">
+          </div>
+          <div class="form-group">
+            <label>المعاملات (args) - JSON</label>
+            <textarea id="serverArgs" placeholder='["-y", "package-name"]' style="min-height:50px"></textarea>
+          </div>
+          <div id="stdioEnvSection">
+            <div class="section-title">متغيرات البيئة</div>
+            <div id="envVarsContainer" class="env-vars-grid"></div>
+            <button type="button" class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="addEnvVar()">+ إضافة متغير</button>
+            <div id="envRawToggle" style="margin-top:0.75rem">
+              <button type="button" class="expand-btn" onclick="toggleEnvRaw()">تعديل JSON مباشرة</button>
+            </div>
+            <div id="envRawSection" class="raw-json" style="display:none">
+              <textarea id="serverEnv" placeholder='{"KEY": "value أو ${env:VAR}"}' style="min-height:80px;margin-top:0.5rem"></textarea>
+            </div>
+          </div>
+        </div>
+        <div id="tabRemote" class="tab-content">
+          <div class="form-group">
+            <label>اسم الخادم</label>
+            <input type="text" id="serverNameRemote" placeholder="my-remote-mcp">
+          </div>
+          <div class="form-group">
+            <label>رابط الخادم</label>
+            <input type="text" id="serverUrl" placeholder="https://mcp.example.com/sse">
+          </div>
+          <div id="remoteEnvSection">
+            <div class="section-title">Headers (مصادقة)</div>
+            <div id="headersVarsContainer" class="env-vars-grid"></div>
+            <button type="button" class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="addHeaderVar()">+ إضافة</button>
+            <div id="headersRawToggle" style="margin-top:0.75rem">
+              <button type="button" class="expand-btn" onclick="toggleHeadersRaw()">تعديل JSON</button>
+            </div>
+            <div id="headersRawSection" class="raw-json" style="display:none">
+              <textarea id="serverHeaders" placeholder='{"Authorization": "Bearer ${env:API_KEY}"}' style="min-height:60px;margin-top:0.5rem"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">إلغاء</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="saveServer()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="importModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>استيراد JSON</h2>
+        <button class="close-btn" onclick="closeImportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-area">
+          <p>الصق إعداد MCP Studio أو VS Code (<code>servers</code> أو <code>mcpServers</code>)</p>
+          <textarea id="importJson" placeholder='{"mcpServers": {...}}'></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeImportModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="importConfig()">استيراد</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script>
+    const API = '/api';
+    let editingName = null;
+    let envVarsData = {};
+    let headersVarsData = {};
+    let useEnvRaw = false;
+    let useHeadersRaw = false;
+
+    const SENSITIVE_KEYS = ['key', 'token', 'secret', 'password', 'auth', 'bearer'];
+
+    function isSensitiveKey(key) {
+      return SENSITIVE_KEYS.some(k => key.toLowerCase().includes(k));
+    }
+
+    function extractEnvPlaceholders(obj) {
+      const vars = new Set();
+      const str = JSON.stringify(obj);
+      const re = /\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}|\$\{([A-Z_][A-Z0-9_]*)\}/g;
+      let m;
+      while ((m = re.exec(str)) !== null) {
+        vars.add(m[1] || m[2]);
+      }
+      return Array.from(vars);
+    }
+
+    function parseEnvFromConfig(envObj) {
+      const parsed = {};
+      for (const [k, v] of Object.entries(envObj || {})) {
+        const val = String(v);
+        const envMatch = val.match(/^\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}$/) || val.match(/^\$\{([A-Z_][A-Z0-9_]*)\}$/);
+        parsed[k] = {
+          key: k,
+          value: envMatch ? '' : val,
+          useEnvRef: !!envMatch,
+          envVar: envMatch ? (envMatch[1] || envMatch[2]) : null
+        };
+      }
+      return parsed;
+    }
+
+    function buildEnvFromParsed(parsed) {
+      const env = {};
+      for (const [k, p] of Object.entries(parsed)) {
+        if (!k) continue;
+        if (p.useEnvRef && p.envVar) {
+          env[k] = `\${env:${p.envVar}}`;
+        } else if (p.value !== undefined && p.value !== '') {
+          env[k] = p.value;
+        }
+      }
+      return env;
+    }
+
+    function renderEnvVars(containerId, data, onAdd, onChange) {
+      const container = document.getElementById(containerId);
+      const isEnv = containerId.includes('env');
+      container.innerHTML = '';
+      for (const [k, p] of Object.entries(data)) {
+        const row = document.createElement('div');
+        row.className = 'env-var-row';
+        const inputType = isSensitiveKey(k) ? 'password' : 'text';
+        const envRef = p.envVar || k;
+        row.innerHTML = `
+          <div>
+            <label>${escapeHtml(k)}</label>
+            <input type="${inputType}" data-key="${escapeHtml(k)}" value="${escapeHtml(p.value || '')}" placeholder="${p.useEnvRef ? ('${env:' + envRef + '}') : ('قيمة أو $' + '{env:VAR}')}" />
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:0.35rem">
+            <label class="env-hint" style="white-space:nowrap;margin:0;cursor:pointer" title="استخدام $&#123;env:VAR&#125; بدل القيمة المباشرة">
+              <input type="checkbox" data-key="${escapeHtml(k)}" ${p.useEnvRef ? 'checked' : ''} /> مرجع
+            </label>
+            <button type="button" class="btn btn-danger btn-sm btn-icon" onclick="removeEnvVar('${escapeHtml(k)}','${isEnv ? 'env' : 'headers'}')">&times;</button>
+          </div>
+        `;
+        const input = row.querySelector('input[type="text"], input[type="password"]');
+        const check = row.querySelector('input[type="checkbox"]');
+        input.oninput = () => { data[k].value = input.value; };
+        check.onchange = () => { data[k].useEnvRef = check.checked; data[k].envVar = data[k].envVar || k; };
+        container.appendChild(row);
+      }
+    }
+
+    function addEnvVar() {
+      const key = prompt('اسم المتغير (مثال: API_KEY)');
+      if (!key?.trim()) return;
+      const k = key.trim();
+      if (envVarsData[k]) return toast('المتغير موجود', 'info');
+      envVarsData[k] = { key: k, value: '', useEnvRef: false, envVar: null };
+      renderEnvVars('envVarsContainer', envVarsData, addEnvVar, () => {});
+    }
+
+    function addHeaderVar() {
+      const key = prompt('اسم الـ Header (مثال: Authorization)');
+      if (!key?.trim()) return;
+      const k = key.trim();
+      if (headersVarsData[k]) return toast('موجود', 'info');
+      headersVarsData[k] = { key: k, value: '', useEnvRef: false, envVar: null };
+      renderEnvVars('headersVarsContainer', headersVarsData, addHeaderVar, () => {});
+    }
+
+    function removeEnvVar(key, type) {
+      if (type === 'env') {
+        delete envVarsData[key];
+        renderEnvVars('envVarsContainer', envVarsData, addEnvVar, () => {});
+      } else {
+        delete headersVarsData[key];
+        renderEnvVars('headersVarsContainer', headersVarsData, addHeaderVar, () => {});
+      }
+    }
+
+    function toggleEnvRaw() {
+      useEnvRaw = !useEnvRaw;
+      document.getElementById('envRawSection').style.display = useEnvRaw ? 'block' : 'none';
+      if (useEnvRaw) {
+        document.getElementById('serverEnv').value = JSON.stringify(buildEnvFromParsed(envVarsData), null, 2);
+      }
+    }
+
+    function toggleHeadersRaw() {
+      useHeadersRaw = !useHeadersRaw;
+      document.getElementById('headersRawSection').style.display = useHeadersRaw ? 'block' : 'none';
+      if (useHeadersRaw) {
+        document.getElementById('serverHeaders').value = JSON.stringify(buildEnvFromParsed(headersVarsData), null, 2);
+      }
+    }
+
+    function toast(msg, type = 'success') {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3000);
+    }
+
+    function getAuthHeaders() {
+      const token = sessionStorage.getItem('mcpHubToken') || new URLSearchParams(location.search).get('token');
+      if (token) {
+        sessionStorage.setItem('mcpHubToken', token);
+        return { 'Authorization': 'Bearer ' + token };
+      }
+      return {};
+    }
+
+    async function api(path, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', ...getAuthHeaders(), ...opts.headers };
+      const res = await fetch(API + path, { headers, ...opts });
+      const data = res.ok ? await res.json().catch(() => ({})) : await res.json().catch(() => ({ error: res.statusText }));
+      if (res.status === 401) throw new Error('مطلوب توكن أو كلمة مرور');
+      if (!res.ok) throw new Error(data.error || data.message || 'خطأ في الطلب');
+      return data;
+    }
+
+    function updateConnectionUrl() {
+      const url = window.location.origin + '/mcp';
+      document.getElementById('connectionUrl').value = url;
+      const hint = document.getElementById('mcpUrlHint');
+      if (hint) hint.textContent = url;
+    }
+
+    function copyUrl() {
+      const input = document.getElementById('connectionUrl');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      toast('تم النسخ');
+    }
+
+    async function loadHealth() {
+      try {
+        const h = await api('/health');
+        const badge = document.getElementById('statusBadge');
+        badge.className = 'badge ' + (h.state === 'ready' ? 'badge-success' : 'badge-warning');
+        badge.textContent = h.state === 'ready' ? 'متصل' : h.state;
+        return h;
+      } catch (e) {
+        document.getElementById('statusBadge').className = 'badge badge-error';
+        document.getElementById('statusBadge').textContent = 'غير متصل';
+        throw e;
+      }
+    }
+
+    async function loadServers() {
+      try {
+        const [{ servers }, { config, configPath, canEdit }] = await Promise.all([api('/servers'), loadConfig()]);
+        const pathHint = document.getElementById('configPathHint');
+        const noEditWarning = document.getElementById('noEditWarning');
+        const editButtons = document.getElementById('editButtons');
+        if (configPath && canEdit) {
+          pathHint.textContent = 'ملف الإعداد: ' + configPath;
+          pathHint.style.display = 'block';
+          noEditWarning.style.display = 'none';
+          editButtons.style.display = 'flex';
+        } else if (!canEdit) {
+          pathHint.style.display = 'none';
+          noEditWarning.style.display = 'block';
+          editButtons.style.display = 'none';
+        } else {
+          pathHint.style.display = 'none';
+          noEditWarning.style.display = 'none';
+        }
+        const list = document.getElementById('serverList');
+        const empty = document.getElementById('emptyState');
+        list.innerHTML = '';
+        const serverMap = new Map((servers || []).map(s => [s.name, s]));
+        const allNames = [...new Set([...(servers || []).map(s => s.name), ...Object.keys(config.mcpServers || {})])];
+        if (allNames.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        empty.style.display = 'none';
+        allNames.forEach(name => {
+          const s = serverMap.get(name) || { name, status: 'disabled', transportType: config.mcpServers[name]?.url ? 'sse' : 'stdio' };
+          const li = document.createElement('li');
+          li.className = 'server-item';
+          const statusClass = s.status === 'connected' ? 'badge-success' : ['error','disconnected','disabled'].includes(s.status) ? 'badge-error' : 'badge-warning';
+          li.innerHTML = `
+            <div class="server-info">
+              <span class="server-name">${escapeHtml(s.name)}</span>
+              <span class="badge ${statusClass}">${s.status || '—'}</span>
+              <span class="server-type">${s.transportType || ''}</span>
+            </div>
+            <div class="server-actions">
+              <button class="btn btn-secondary btn-sm" onclick="openTestFor('${escapeHtml(s.name)}')">اختبار</button>
+              <button class="btn btn-secondary btn-sm" onclick="editServer('${escapeHtml(s.name)}')">تعديل</button>
+              <button class="btn btn-primary btn-sm" onclick="toggleServer('${escapeHtml(s.name)}', ${s.status === 'connected'})">${s.status === 'connected' ? 'إيقاف' : 'تشغيل'}</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteServer('${escapeHtml(s.name)}')">حذف</button>
+            </div>
+          `;
+          list.appendChild(li);
+        });
+        await populateTestSelects(Array.from(serverMap.values()));
+      } catch (e) {
+        console.error(e);
+        toast('فشل تحميل الخوادم', 'error');
+      }
+    }
+
+    async function populateTestSelects(servers) {
+      const serverSelect = document.getElementById('testServer');
+      const toolSelect = document.getElementById('testTool');
+      const current = serverSelect.value;
+      serverSelect.innerHTML = '<option value="">-- اختر --</option>';
+      (servers || []).forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.name;
+        if (s.name === current) opt.selected = true;
+        serverSelect.appendChild(opt);
+      });
+      serverSelect.onchange = async () => {
+        const name = serverSelect.value;
+        toolSelect.innerHTML = '<option value="">-- اختر --</option>';
+        if (!name) return;
+        try {
+          const { server } = await api('/servers/info', { method: 'POST', body: JSON.stringify({ server_name: name }) });
+          (server.capabilities?.tools || []).forEach(t => {
+            const o = document.createElement('option');
+            o.value = typeof t === 'string' ? t : t.name;
+            o.textContent = typeof t === 'string' ? t : t.name;
+            toolSelect.appendChild(o);
+          });
+        } catch (e) {}
+      };
+      if (serverSelect.value) serverSelect.dispatchEvent(new Event('change'));
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+
+    async function loadConfig() {
+      try {
+        return await api('/config');
+      } catch (e) {
+        return { config: { mcpServers: {} }, canEdit: false };
+      }
+    }
+
+    function openAddModal() {
+      editingName = null;
+      document.getElementById('modalTitle').textContent = 'إضافة خادم';
+      document.getElementById('serverName').value = '';
+      document.getElementById('serverCommand').value = 'npx';
+      document.getElementById('serverArgs').value = '';
+      envVarsData = {};
+      headersVarsData = {};
+      useEnvRaw = false;
+      useHeadersRaw = false;
+      document.getElementById('envRawSection').style.display = 'none';
+      document.getElementById('headersRawSection').style.display = 'none';
+      document.getElementById('serverNameRemote').value = '';
+      document.getElementById('serverUrl').value = '';
+      renderEnvVars('envVarsContainer', envVarsData, addEnvVar, () => {});
+      renderEnvVars('headersVarsContainer', headersVarsData, addHeaderVar, () => {});
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.tab[data-tab="stdio"]').classList.add('active');
+      document.getElementById('tabStdio').classList.add('active');
+      document.getElementById('tabRemote').classList.remove('active');
+      document.getElementById('serverModal').style.display = 'flex';
+    }
+
+    async function editServer(name) {
+      const { config } = await loadConfig();
+      const s = config.mcpServers?.[name];
+      if (!s) return toast('الخادم غير موجود', 'error');
+      editingName = name;
+      document.getElementById('modalTitle').textContent = 'تعديل خادم';
+      if (s.command) {
+        document.querySelector('.tab[data-tab="stdio"]').click();
+        document.getElementById('serverName').value = name;
+        document.getElementById('serverCommand').value = s.command || '';
+        document.getElementById('serverArgs').value = JSON.stringify(s.args || [], null, 2);
+        envVarsData = parseEnvFromConfig(s.env);
+        if (Object.keys(envVarsData).length === 0) envVarsData = {};
+        document.getElementById('serverEnv').value = JSON.stringify(s.env || {}, null, 2);
+      } else {
+        document.querySelector('.tab[data-tab="remote"]').click();
+        document.getElementById('serverNameRemote').value = name;
+        document.getElementById('serverUrl').value = s.url || '';
+        headersVarsData = parseEnvFromConfig(s.headers);
+        if (Object.keys(headersVarsData).length === 0) headersVarsData = {};
+        document.getElementById('serverHeaders').value = JSON.stringify(s.headers || {}, null, 2);
+      }
+      renderEnvVars('envVarsContainer', envVarsData, addEnvVar, () => {});
+      renderEnvVars('headersVarsContainer', headersVarsData, addHeaderVar, () => {});
+      document.getElementById('envRawSection').style.display = 'none';
+      document.getElementById('headersRawSection').style.display = 'none';
+      document.getElementById('serverModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('serverModal').style.display = 'none';
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1)).classList.add('active');
+      });
+    });
+
+    function getEnvFromForm() {
+      if (useEnvRaw) {
+        try {
+          return JSON.parse(document.getElementById('serverEnv').value || '{}');
+        } catch (e) {
+          return {};
+        }
+      }
+      return buildEnvFromParsed(envVarsData);
+    }
+
+    function getHeadersFromForm() {
+      if (useHeadersRaw) {
+        try {
+          return JSON.parse(document.getElementById('serverHeaders').value || '{}');
+        } catch (e) {
+          return {};
+        }
+      }
+      return buildEnvFromParsed(headersVarsData);
+    }
+
+    async function saveServer() {
+      const stdioActive = document.getElementById('tabStdio').classList.contains('active');
+      let name, config;
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner"></span> جاري الحفظ...';
+      try {
+        if (stdioActive) {
+          name = document.getElementById('serverName').value.trim();
+          if (!name) { toast('أدخل اسم الخادم', 'error'); return; }
+          let args;
+          try {
+            args = JSON.parse(document.getElementById('serverArgs').value || '[]');
+          } catch (e) {
+            toast('args غير صالح', 'error');
+            return;
+          }
+          config = {
+            command: document.getElementById('serverCommand').value.trim() || 'npx',
+            args,
+            env: getEnvFromForm()
+          };
+        } else {
+          name = document.getElementById('serverNameRemote').value.trim();
+          if (!name) { toast('أدخل اسم الخادم', 'error'); return; }
+          const url = document.getElementById('serverUrl').value.trim();
+          if (!url) { toast('أدخل رابط الخادم', 'error'); return; }
+          config = { url, headers: getHeadersFromForm() };
+        }
+        const { config: current } = await loadConfig();
+        const mcpServers = { ...(current.mcpServers || {}) };
+        if (editingName && editingName !== name) delete mcpServers[editingName];
+        mcpServers[name] = config;
+        await api('/config', { method: 'POST', body: JSON.stringify({ mcpServers }) });
+        closeModal();
+        toast('تم الحفظ بنجاح');
+        await refresh();
+      } catch (e) {
+        toast(e.message || 'خطأ', 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'حفظ';
+      }
+    }
+
+    async function deleteServer(name) {
+      if (!confirm('حذف الخادم "' + name + '"؟')) return;
+      try {
+        const { config } = await loadConfig();
+        const mcpServers = { ...(config.mcpServers || {}) };
+        delete mcpServers[name];
+        await api('/config', { method: 'POST', body: JSON.stringify({ mcpServers }) });
+        toast('تم الحذف');
+        await refresh();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function toggleServer(name, isConnected) {
+      try {
+        if (isConnected) {
+          await api('/servers/stop', { method: 'POST', body: JSON.stringify({ server_name: name }) });
+        } else {
+          await api('/servers/start', { method: 'POST', body: JSON.stringify({ server_name: name }) });
+        }
+        await loadServers();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    function openTestFor(name) {
+      document.getElementById('testServer').value = name;
+      document.getElementById('testServer').dispatchEvent(new Event('change'));
+    }
+
+    async function runTest() {
+      const server = document.getElementById('testServer').value;
+      const tool = document.getElementById('testTool').value;
+      let args = {};
+      try {
+        args = JSON.parse(document.getElementById('testArgs').value || '{}');
+      } catch (e) {}
+      if (!server || !tool) {
+        toast('اختر الخادم والأداة', 'error');
+        return;
+      }
+      const resultEl = document.getElementById('testResult');
+      const testBtn = document.getElementById('testBtn');
+      resultEl.innerHTML = '<div class="test-result">جاري التشغيل...</div>';
+      testBtn.disabled = true;
+      try {
+        const { result } = await api('/servers/tools', {
+          method: 'POST',
+          body: JSON.stringify({ server_name: server, tool, arguments: args })
+        });
+        resultEl.innerHTML = '<div class="test-result success">' + escapeHtml(JSON.stringify(result, null, 2)) + '</div>';
+        toast('تم التنفيذ');
+      } catch (e) {
+        resultEl.innerHTML = '<div class="test-result error">' + escapeHtml(e.message) + '</div>';
+        toast(e.message, 'error');
+      } finally {
+        testBtn.disabled = false;
+      }
+    }
+
+    function openImportModal() {
+      document.getElementById('importJson').value = '';
+      document.getElementById('importModal').style.display = 'flex';
+    }
+
+    function closeImportModal() {
+      document.getElementById('importModal').style.display = 'none';
+    }
+
+    async function importConfig() {
+      let raw;
+      try {
+        raw = JSON.parse(document.getElementById('importJson').value);
+      } catch (e) {
+        toast('JSON غير صالح', 'error');
+        return;
+      }
+      const mcpServers = raw.mcpServers || raw.servers || {};
+      if (Object.keys(mcpServers).length === 0) {
+        toast('لم يتم العثور على خوادم', 'error');
+        return;
+      }
+      try {
+        const { config } = await loadConfig();
+        const merged = { ...(config.mcpServers || {}), ...mcpServers };
+        await api('/config', { method: 'POST', body: JSON.stringify({ mcpServers: merged }) });
+        closeImportModal();
+        toast('تم الاستيراد');
+        await refresh();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function refresh() {
+      await loadHealth();
+      await loadServers();
+    }
+
+    (async function init() {
+      updateConnectionUrl();
+      await refresh();
+      setInterval(loadHealth, 10000);
+    })();
+  </script>
+</body>
+</html>

@@ -1,5 +1,9 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import logger from "./utils/logger.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { MCPHub } from "./MCPHub.js";
 import { SSEManager, EventTypes, HubState, SubscriptionTypes } from "./utils/sse-manager.js";
 import {
@@ -16,13 +20,70 @@ import {
 import { getMarketplace } from "./marketplace.js";
 import { MCPServerEndpoint } from "./mcp/server.js";
 import { WorkspaceCacheManager } from "./utils/workspace-cache.js";
+import { DbConfigManager } from "./utils/db-config.js";
 
 const SERVER_ID = "mcp-hub";
+
+// Auth: paths that skip UI token check
+const UI_AUTH_SKIP_PATHS = ["/mcp", "/messages", "/api/health", "/api/oauth/callback"];
+const MCP_PATHS = ["/mcp", "/messages"];
+
+function validateToken(req, token) {
+  const authHeader = req.headers.authorization;
+  const headerToken = req.headers["x-mcp-hub-token"] || req.headers["x-mcp-host-token"];
+  const queryToken = req.query?.token;
+
+  if (queryToken === token) return true;
+  if (authHeader?.startsWith("Bearer ") && authHeader.slice(7) === token) return true;
+  if (headerToken === token) return true;
+  if (authHeader?.startsWith("Basic ")) {
+    try {
+      const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+      const [, password] = decoded.split(":");
+      if (password === token) return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
+function authMiddleware(req, res, next) {
+  const mcpHostToken = process.env.MCP_HOST_TOKEN;
+  const uiToken = process.env.MCP_HUB_UI_TOKEN;
+
+  // MCP endpoint: require MCP_HOST_TOKEN when set
+  if (MCP_PATHS.includes(req.path)) {
+    if (!mcpHostToken) return next();
+    if (validateToken(req, mcpHostToken)) return next();
+    return res.status(401).json({ error: "Unauthorized", code: "MCP_AUTH_REQUIRED" });
+  }
+
+  // UI/API: require MCP_HUB_UI_TOKEN when set
+  if (!uiToken) return next();
+  if (UI_AUTH_SKIP_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
+    return next();
+  }
+  if (validateToken(req, uiToken)) return next();
+
+  res.setHeader("WWW-Authenticate", 'Basic realm="MCP Hub"');
+  if (req.accepts("json")) {
+    res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
+  } else {
+    res.status(401).send("Unauthorized");
+  }
+}
 
 // Create Express app
 const app = express();
 app.use(express.json());
+
+// Protect UI and API when MCP_HUB_UI_TOKEN is set
+app.use(authMiddleware);
+
 app.use("/api", router);
+
+// Serve Web UI - resolve path for both dev (src/) and prod (dist/)
+const publicPath = path.join(__dirname, "..", "public");
+app.use("/", express.static(publicPath));
 
 // Helper to determine HTTP status code from error type
 function getStatusCode(error) {
@@ -46,6 +107,7 @@ class ServiceManager {
     this.autoShutdown = options.autoShutdown;
     this.shutdownDelay = options.shutdownDelay;
     this.watch = options.watch;
+    this.databaseUrl = options.databaseUrl;
     this.mcpHub = null;
     this.server = null;
     this.workspaceCache = new WorkspaceCacheManager(options);
@@ -102,7 +164,7 @@ class ServiceManager {
     // Initialize workspace cache first
     logger.info("Initializing workspace cache");
     await this.workspaceCache.initialize();
-    await this.workspaceCache.register(this.port, this.config);
+    await this.workspaceCache.register(this.port, this.databaseUrl ? ["postgresql"] : this.config);
     await this.workspaceCache.startWatching();
 
     // Setup workspace cache event handlers
@@ -118,10 +180,16 @@ class ServiceManager {
 
     // Then initialize MCP Hub
     logger.info("Initializing MCP Hub");
+    let configManager = null;
+    if (this.databaseUrl) {
+      logger.info("Using PostgreSQL for config storage");
+      configManager = new DbConfigManager(this.databaseUrl);
+    }
     this.mcpHub = new MCPHub(this.config, {
       watch: this.watch,
       port: this.port,
       marketplace,
+      configManager,
     });
 
     // Setup event handlers
@@ -422,6 +490,59 @@ registerRoute(
       throw wrapError(error, "MARKETPLACE_ERROR", {
         mcpId: req.body.mcpId,
       });
+    }
+  }
+);
+
+// Config endpoints for Web UI
+registerRoute(
+  "GET",
+  "/config",
+  "Get current config for editing",
+  async (req, res) => {
+    try {
+      const configManager = serviceManager?.mcpHub?.configManager;
+      const config = configManager?.getConfig();
+      const configPaths = configManager?.configPaths;
+      const useDatabase = configManager?.useDatabase;
+      const canEdit = useDatabase || (configPaths && configPaths.length > 0);
+
+      res.json({
+        config: config || { mcpServers: {} },
+        configPath: useDatabase ? "postgresql" : configPaths?.[0] || null,
+        canEdit,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      throw wrapError(error, "CONFIG_READ_ERROR");
+    }
+  }
+);
+
+registerRoute(
+  "POST",
+  "/config",
+  "Save config and restart hub",
+  async (req, res) => {
+    const { mcpServers } = req.body;
+    try {
+      if (!mcpServers || typeof mcpServers !== "object") {
+        throw new ValidationError("Missing or invalid mcpServers in request body");
+      }
+      const configManager = serviceManager?.mcpHub?.configManager;
+      const canSave = configManager?.useDatabase || (configManager?.configPaths?.length > 0);
+      if (!canSave) {
+        throw new ValidationError("Config is not file or database based; cannot save from UI");
+      }
+      await configManager.saveConfig({ mcpServers });
+      await serviceManager.restartHub();
+      res.json({
+        status: "ok",
+        message: "Config saved and hub restarted",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      throw wrapError(error, "CONFIG_SAVE_ERROR");
     }
   }
 );
@@ -930,7 +1051,10 @@ router.use((err, req, res, next) => {
 
 // Start the server with options
 export async function startServer(options = {}) {
-  serviceManager = new ServiceManager(options);
+  serviceManager = new ServiceManager({
+    ...options,
+    databaseUrl: options.databaseUrl || process.env.DATABASE_URL,
+  });
 
   try {
     serviceManager.setupSignalHandlers();

@@ -58,9 +58,13 @@ async function run() {
       },
       config: {
         alias: "c",
-        describe: "Path to config file(s). Can be specified multiple times. Merged in order.",
+        describe: "Path to config file(s). Not required when using --database-url.",
         type: "array",
-        demandOption: true,
+      },
+      "database-url": {
+        alias: "d",
+        describe: "PostgreSQL connection URL for storing config. Overrides file-based config.",
+        type: "string",
       },
       watch: {
         alias: "w",
@@ -80,16 +84,26 @@ async function run() {
         default: 0,
       },
     })
-    .example("mcp-hub --port 3000 --config ./global.json --config ./project.json")
+    .example("mcp-hub --port 3000 --config ./global.json")
+    .example("mcp-hub --port 3000 --database-url postgresql://user:pass@localhost:5432/mcphub")
     .help("h")
     .alias("h", "help")
     .fail(handleParseError).argv;
 
+  const databaseUrl = argv["database-url"] || process.env.DATABASE_URL;
+  const config = argv.config;
+
+  if (!databaseUrl && (!config || config.length === 0)) {
+    handleParseError("Either --config or --database-url (or DATABASE_URL) is required", new Error("Missing config"));
+    return;
+  }
+
   try {
     await startServer({
       port: argv.port,
-      config: argv.config, // This will now be an array of paths
-      watch: argv.watch,
+      config: config || [],
+      databaseUrl: databaseUrl || undefined,
+      watch: argv.watch && !databaseUrl,
       autoShutdown: argv["auto-shutdown"],
       shutdownDelay: argv["shutdown-delay"],
     });

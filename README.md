@@ -61,6 +61,18 @@ Configure all MCP clients with just one endpoint:
 }
 ```
 
+When `MCP_HOST_TOKEN` is set, add the token to headers:
+```json
+{
+    "mcpServers" : {
+        "Hub": {
+            "url" : "http://localhost:37373/mcp",
+            "headers": { "Authorization": "Bearer YOUR_MCP_HOST_TOKEN" }
+        }
+    }
+}
+```
+
 The Hub automatically:
 - Namespaces capabilities to prevent conflicts (e.g., `filesystem__search` vs `database__search`)
 - Routes requests to the appropriate server
@@ -132,6 +144,14 @@ Connected services that:
 - Implement real-time capability updates
 - Support automatic status recovery
 - Maintain consistent interface across transport types
+
+## Authentication
+
+- **MCP_HUB_UI_TOKEN**: Protects the web UI and `/api`. Use Basic Auth or Bearer token.
+- **MCP_HOST_TOKEN**: Protects the MCP endpoint (`/mcp`). Add `headers: { "Authorization": "Bearer <token>" }` in client config.
+- **MCP server credentials** (API keys, etc.): Stored in Hub (PostgreSQL or config file), used automatically—no need to pass them when using MCP.
+
+See [docs/AUTH.md](docs/AUTH.md) for details.
 
 ## Installation
 

@@ -1,0 +1,38 @@
+# انسخ .env.example إلى .env وعدّل القيم: cp .env.example .env
+# Docker Compose يقرأ .env تلقائياً للمتغيرات
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-hub-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mcphub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcphub_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-mcphub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp-hub:
+    build: .
+    container_name: mcp-hub
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-mcphub}:${POSTGRES_PASSWORD:-mcphub_secret}@postgres:5432/${POSTGRES_DB:-mcphub}
+      - MCP_HUB_UI_TOKEN=${MCP_HUB_UI_TOKEN:-}
+      - MCP_HOST_TOKEN=${MCP_HOST_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
