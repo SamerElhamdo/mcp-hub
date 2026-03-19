@@ -29,6 +29,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-mcphub}:${POSTGRES_PASSWORD:-mcphub_secret}@postgres:5432/${POSTGRES_DB:-mcphub}
       - MCP_HUB_UI_TOKEN=${MCP_HUB_UI_TOKEN:-}
       - MCP_HOST_TOKEN=${MCP_HOST_TOKEN:-}
+      - MCP_HUB_PUBLIC_URL=${MCP_HUB_PUBLIC_URL:-}
+      - MCP_OAUTH_APPROVAL_PASSWORD=${MCP_OAUTH_APPROVAL_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
