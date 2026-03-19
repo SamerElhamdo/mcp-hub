@@ -43,6 +43,21 @@
 
 ---
 
+## Claude.ai مع OAuth
+
+عند تعيين `MCP_HOST_TOKEN`، يدعم MCP Hub **OAuth 2.0** تلقائياً. Claude.ai يتصل عبر OAuth:
+
+1. أضف Custom Connector في Claude.ai: Settings > Connectors > Add
+2. أدخل رابط MCP: `https://your-domain.com/mcp`
+3. اضغط Connect — Claude سيفتح المتصفح لإكمال OAuth ثم يتصل تلقائياً
+
+**ملاحظة:** إذا كان Hub خلف reverse proxy، عيّن `MCP_HUB_PUBLIC_URL` في البيئة:
+```
+MCP_HUB_PUBLIC_URL=https://mcp.yourdomain.com
+```
+
+---
+
 ## استخدام التوكن في الرابط (?token=xxx)
 
 بعض العملاء (مثل **Cloud Code**، VS Code للويب، أو بيئات سحابية أخرى) **لا تدعم تمرير headers** في إعداد MCP. استخدم التوكن في الرابط مباشرة:

@@ -21,12 +21,34 @@ import { getMarketplace } from "./marketplace.js";
 import { MCPServerEndpoint } from "./mcp/server.js";
 import { WorkspaceCacheManager } from "./utils/workspace-cache.js";
 import { DbConfigManager } from "./utils/db-config.js";
+import {
+  createAuthCode,
+  exchangeCodeForToken,
+  isRedirectUriAllowed,
+  getWWWAuthenticateHeader,
+  getProtectedResourceMetadata,
+  getAuthorizationServerMetadata,
+} from "./utils/oauth-client-auth.js";
 
 const SERVER_ID = "mcp-hub";
 
 // Auth: paths that skip UI token check
-const UI_AUTH_SKIP_PATHS = ["/mcp", "/sse", "/messages", "/api/health", "/api/oauth/callback"];
+const UI_AUTH_SKIP_PATHS = [
+  "/mcp", "/sse", "/messages", "/api/health", "/api/oauth/callback",
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-authorization-server",
+  "/oauth/authorize",
+  "/oauth/token",
+];
 const MCP_PATHS = ["/mcp", "/sse", "/messages"];
+
+function getBaseUrl(req) {
+  const envUrl = process.env.MCP_HUB_PUBLIC_URL;
+  if (envUrl) return envUrl.replace(/\/$/, "");
+  const proto = req.get("x-forwarded-proto") || req.protocol || "http";
+  const host = req.get("x-forwarded-host") || req.get("host") || `localhost:${process.env.PORT || 3000}`;
+  return `${proto}://${host}`;
+}
 
 function validateToken(req, token) {
   const authHeader = req.headers.authorization;
@@ -54,6 +76,7 @@ function authMiddleware(req, res, next) {
   if (MCP_PATHS.includes(req.path)) {
     if (!mcpHostToken) return next();
     if (validateToken(req, mcpHostToken)) return next();
+    res.setHeader("WWW-Authenticate", getWWWAuthenticateHeader(getBaseUrl(req)));
     return res.status(401).json({ error: "Unauthorized", code: "MCP_AUTH_REQUIRED" });
   }
 
@@ -76,15 +99,68 @@ function authMiddleware(req, res, next) {
 const app = express();
 app.use(express.json());
 
-// CORS for MCP endpoint - some clients need this
+// CORS for MCP and OAuth endpoints
+const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known"];
 app.use((req, res, next) => {
-  if (["/mcp", "/sse", "/messages"].includes(req.path)) {
+  if (CORS_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-MCP-Host-Token, X-MCP-Hub-Token");
     if (req.method === "OPTIONS") return res.sendStatus(204);
   }
   next();
+});
+
+// OAuth 2.0 endpoints for Claude.ai and other OAuth-only clients (when MCP_HOST_TOKEN is set)
+app.get("/.well-known/oauth-protected-resource", (req, res) => {
+  if (!process.env.MCP_HOST_TOKEN) return res.status(404).end();
+  res.json(getProtectedResourceMetadata(getBaseUrl(req)));
+});
+
+app.get("/.well-known/oauth-authorization-server", (req, res) => {
+  if (!process.env.MCP_HOST_TOKEN) return res.status(404).end();
+  res.json(getAuthorizationServerMetadata(getBaseUrl(req)));
+});
+
+app.get("/oauth/authorize", (req, res) => {
+  const mcpHostToken = process.env.MCP_HOST_TOKEN;
+  if (!mcpHostToken) return res.status(404).end();
+
+  const { redirect_uri, state, code_challenge, code_challenge_method } = req.query;
+  if (!redirect_uri || !code_challenge) {
+    return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri and code_challenge required" });
+  }
+  if (!isRedirectUriAllowed(redirect_uri)) {
+    return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri not allowed" });
+  }
+
+  const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
+
+  const url = new URL(redirect_uri);
+  url.searchParams.set("code", code);
+  if (state) url.searchParams.set("state", state);
+  res.redirect(302, url.toString());
+});
+
+app.post("/oauth/token", express.urlencoded({ extended: true }), (req, res) => {
+  const mcpHostToken = process.env.MCP_HOST_TOKEN;
+  if (!mcpHostToken) return res.status(404).end();
+
+  const { grant_type, code, code_verifier, redirect_uri } = req.body || req.query || {};
+  if (grant_type !== "authorization_code" || !code || !code_verifier || !redirect_uri) {
+    return res.status(400).json({ error: "invalid_request", error_description: "grant_type, code, code_verifier, redirect_uri required" });
+  }
+
+  const accessToken = exchangeCodeForToken(code, code_verifier, redirect_uri, mcpHostToken);
+  if (!accessToken) {
+    return res.status(400).json({ error: "invalid_grant", error_description: "Invalid or expired authorization code" });
+  }
+
+  res.json({
+    access_token: accessToken,
+    token_type: "bearer",
+    expires_in: 3600,
+  });
 });
 
 // Protect UI and API when MCP_HUB_UI_TOKEN is set
