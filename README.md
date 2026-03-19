@@ -73,6 +73,16 @@ When `MCP_HOST_TOKEN` is set, add the token to headers:
 }
 ```
 
+### Claude.ai (Web)
+Claude.ai uses OAuth 2.0—no manual token entry. Add a custom connector:
+
+1. **Settings** → **Connectors** → **Add** → **Add custom connector**
+2. **Name:** e.g. `MCP Hub`
+3. **Remote MCP server URL:** `https://your-domain.com/mcp`
+4. Click **Add** then **Connect**
+
+OAuth completes automatically (redirect in browser). You never enter the token—it lives on the server; the OAuth flow lets Claude obtain it after you click Connect. Optional: set `MCP_OAUTH_APPROVAL_PASSWORD` to require a password before completing the connection (share it only with trusted users). Ensure `MCP_HOST_TOKEN` and `MCP_HUB_PUBLIC_URL` are set on the server. See [docs/AUTH.md](docs/AUTH.md).
+
 The Hub automatically:
 - Namespaces capabilities to prevent conflicts (e.g., `filesystem__search` vs `database__search`)
 - Routes requests to the appropriate server
@@ -148,7 +158,7 @@ Connected services that:
 ## Authentication
 
 - **MCP_HUB_UI_TOKEN**: Protects the web UI and `/api`. Use Basic Auth or Bearer token.
-- **MCP_HOST_TOKEN**: Protects the MCP endpoint (`/mcp`). Add `headers: { "Authorization": "Bearer <token>" }` in client config.
+- **MCP_HOST_TOKEN**: Protects the MCP endpoint (`/mcp`). Add `headers: { "Authorization": "Bearer <token>" }` in client config. For **Claude.ai**, OAuth handles this automatically—no manual token entry.
 - **MCP server credentials** (API keys, etc.): Stored in Hub (PostgreSQL or config file), used automatically—no need to pass them when using MCP.
 
 See [docs/AUTH.md](docs/AUTH.md) for details.

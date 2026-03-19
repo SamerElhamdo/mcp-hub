@@ -39,6 +39,7 @@ const UI_AUTH_SKIP_PATHS = [
   "/.well-known/oauth-authorization-server",
   "/oauth/authorize",
   "/oauth/token",
+  "/oauth/approve",
   "/authorize", "/token", "/register",
 ];
 const MCP_PATHS = ["/mcp", "/sse", "/messages"];
@@ -124,6 +125,12 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
   res.json(getAuthorizationServerMetadata(getBaseUrl(req)));
 });
 
+function renderApprovalPage(params) {
+  const { redirect_uri, state, code_challenge, code_challenge_method, error } = params;
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Approve Connection</title><style>body{font-family:system-ui,sans-serif;max-width:400px;margin:2rem auto;padding:1.5rem;background:#f5f5f5}form{background:#fff;padding:1.5rem;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1)}label{display:block;margin-bottom:.5rem;font-weight:500}input[type=password]{width:100%;padding:.5rem;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}button{width:100%;margin-top:1rem;padding:.6rem;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem}button:hover{background:#555}.err{color:#c00;margin-bottom:.5rem;font-size:.9rem}</style></head><body><form method="post" action="/oauth/approve"><input type="hidden" name="redirect_uri" value="${esc(redirect_uri)}"><input type="hidden" name="state" value="${esc(state)}"><input type="hidden" name="code_challenge" value="${esc(code_challenge)}"><input type="hidden" name="code_challenge_method" value="${esc(code_challenge_method)}"><label for="pw">Connection approval password</label>${error ? `<p class="err">${esc(error)}</p>` : ""}<input type="password" id="pw" name="password" placeholder="Enter password" required autofocus><button type="submit">Approve</button></form></body></html>`;
+}
+
 app.get("/oauth/authorize", (req, res) => {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   if (!mcpHostToken) return res.status(404).end();
@@ -136,8 +143,38 @@ app.get("/oauth/authorize", (req, res) => {
     return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri not allowed" });
   }
 
-  const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
+  const approvalPassword = process.env.MCP_OAUTH_APPROVAL_PASSWORD;
+  if (approvalPassword) {
+    return res.type("html").send(renderApprovalPage({ redirect_uri, state, code_challenge, code_challenge_method }));
+  }
 
+  const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
+  const url = new URL(redirect_uri);
+  url.searchParams.set("code", code);
+  if (state) url.searchParams.set("state", state);
+  res.redirect(302, url.toString());
+});
+
+app.post("/oauth/approve", (req, res) => {
+  const mcpHostToken = process.env.MCP_HOST_TOKEN;
+  const approvalPassword = process.env.MCP_OAUTH_APPROVAL_PASSWORD;
+  if (!mcpHostToken || !approvalPassword) return res.status(404).end();
+
+  const { redirect_uri, state, code_challenge, code_challenge_method, password } = req.body || {};
+  if (!redirect_uri || !code_challenge) {
+    return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri and code_challenge required" });
+  }
+  if (!isRedirectUriAllowed(redirect_uri)) {
+    return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri not allowed" });
+  }
+  if (password !== approvalPassword) {
+    return res.type("html").status(400).send(renderApprovalPage({
+      redirect_uri, state, code_challenge, code_challenge_method,
+      error: "Incorrect password",
+    }));
+  }
+
+  const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
   const url = new URL(redirect_uri);
   url.searchParams.set("code", code);
   if (state) url.searchParams.set("state", state);

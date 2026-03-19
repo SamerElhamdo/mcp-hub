@@ -47,14 +47,46 @@
 
 عند تعيين `MCP_HOST_TOKEN`، يدعم MCP Hub **OAuth 2.0** تلقائياً. Claude.ai يتصل عبر OAuth:
 
-1. أضف Custom Connector في Claude.ai: Settings > Connectors > Add
-2. أدخل رابط MCP: `https://your-domain.com/mcp`
-3. اضغط Connect — Claude سيفتح المتصفح لإكمال OAuth ثم يتصل تلقائياً
+1. **Settings** → **Connectors** → **Add** → **Add custom connector**
+2. **Name:** مثلاً `MCP Hub`
+3. **Remote MCP server URL:** `https://your-domain.com/mcp`
+4. اضغط **Add** ثم **Connect**
 
-**ملاحظة:** إذا كان Hub خلف reverse proxy، عيّن `MCP_HUB_PUBLIC_URL` في البيئة:
+**ملاحظة:** إذا كان Hub خلف reverse proxy، عيّن `MCP_HUB_PUBLIC_URL`:
 ```
 MCP_HUB_PUBLIC_URL=https://mcp.yourdomain.com
 ```
+
+### كلمة مرور الموافقة (اختياري)
+
+لتقييد من يمكنه الاتصال، عيّن `MCP_OAUTH_APPROVAL_PASSWORD`:
+
+```
+MCP_OAUTH_APPROVAL_PASSWORD=كلمة-المرور-السرية
+```
+
+عند الاتصال، ستظهر صفحة تطلب إدخال كلمة المرور قبل إكمال OAuth. شاركها فقط مع من تريد منحهم الوصول.
+
+---
+
+## كيف تمت الموافقة بدون إدخال توكن؟
+
+التوكن (`MCP_HOST_TOKEN`) موجود **على السيرفر فقط** — أنت لا تدخله في Claude.ai.
+
+### التدفق:
+
+1. **أنت تضغط Connect** في Claude.ai ← هذا يعتبر موافقتك على الاتصال.
+2. **Claude يفتح المتصفح** ويوجهك إلى `/oauth/authorize` على Hub.
+3. **Hub يصدر كوداً مؤقتاً** ويُعيد التوجيه فوراً إلى Claude (بدون صفحة تسجيل دخول).
+4. **Claude يتبادل الكود مع Hub** عبر `/oauth/token` (اتصال سيرفر-إلى-سيرفر).
+5. **Hub يعيد التوكن** (`MCP_HOST_TOKEN`) كـ access token لـ Claude.
+6. **Claude يحفظ التوكن** ويستخدمه في كل طلبات MCP التالية.
+
+### الأمان:
+
+- التوكن لا يظهر أبداً في المتصفح أو للمستخدم.
+- PKCE يضمن أن الكود المؤقت لا يُستبدل إلا من قبل من بدأ الطلب.
+- `redirect_uri` مقيد بـ Claude فقط (`claude.ai`, `claude.com`).
 
 ---
 
