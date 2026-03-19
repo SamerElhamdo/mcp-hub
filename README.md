@@ -169,6 +169,15 @@ See [docs/AUTH.md](docs/AUTH.md) for details.
 npm install -g mcp-hub
 ```
 
+### UI (Shadcn + React)
+
+The web UI is built with React, Tailwind CSS, and Shadcn-style components. To develop or rebuild:
+
+```bash
+cd frontend && npm install && npm run dev   # Development
+cd frontend && npm run build                # Production build (outputs to public/)
+```
+
 ## Basic Usage
 
 Start the hub server:
