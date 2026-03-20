@@ -35,6 +35,7 @@ services:
       - MCP_HUB_UI_TOKEN=${MCP_HUB_UI_TOKEN:-}
       - MCP_HOST_TOKEN=${MCP_HOST_TOKEN:-}
       - MCP_HUB_PUBLIC_URL=${MCP_HUB_PUBLIC_URL:-}
+      - MCP_HUB_UI_URL=${MCP_HUB_UI_URL:-}
       - MCP_OAUTH_APPROVAL_PASSWORD=${MCP_OAUTH_APPROVAL_PASSWORD:-}
     depends_on:
       postgres:

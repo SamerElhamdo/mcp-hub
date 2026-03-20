@@ -57,6 +57,9 @@ const UI_AUTH_SKIP_PATHS = [
 ];
 const MCP_PATHS = ["/mcp", "/sse", "/messages"];
 
+// UI URL when separate from backend (for redirects and CORS)
+const UI_URL = process.env.MCP_HUB_UI_URL || "";
+
 function getBaseUrl(req) {
   const envUrl = process.env.MCP_HUB_PUBLIC_URL;
   if (envUrl) return envUrl.replace(/\/$/, "");
@@ -128,7 +131,8 @@ function authMiddleware(req, res, next) {
     if (req.path.startsWith("/api")) {
       return res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
     }
-    return res.redirect(302, `/login?returnUrl=${returnUrl}`);
+    const loginUrl = UI_URL ? `${UI_URL}/login?returnUrl=${returnUrl}` : `/login?returnUrl=${returnUrl}`;
+    return res.redirect(302, loginUrl);
   }
 
   // Legacy: require MCP_HUB_UI_TOKEN when set
@@ -143,7 +147,8 @@ function authMiddleware(req, res, next) {
   if (req.path.startsWith("/api")) {
     return res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
   }
-  return res.redirect(302, `/login?returnUrl=${returnUrl}`);
+  const loginUrl = UI_URL ? `${UI_URL}/login?returnUrl=${returnUrl}` : `/login?returnUrl=${returnUrl}`;
+  return res.redirect(302, loginUrl);
 }
 
 // Create Express app
@@ -151,13 +156,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS for MCP and OAuth endpoints
-const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known", "/authorize", "/token", "/register"];
+// CORS for MCP, OAuth, and API
+const CORS_PATHS = ["/mcp", "/sse", "/messages", "/oauth", "/.well-known", "/authorize", "/token", "/register", "/api"];
 app.use((req, res, next) => {
   if (CORS_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const isApi = req.path.startsWith("/api");
+    const allowOrigin = (isApi && UI_URL) ? UI_URL : "*";
+    res.setHeader("Access-Control-Allow-Origin", allowOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-MCP-Host-Token, X-MCP-Hub-Token");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-MCP-Host-Token, X-MCP-Hub-Token, X-MCP-Hub-Session");
+    if (isApi && UI_URL) res.setHeader("Access-Control-Allow-Credentials", "true");
     if (req.method === "OPTIONS") return res.sendStatus(204);
   }
   next();
@@ -210,7 +218,8 @@ app.get("/oauth/authorize", (req, res) => {
     const user = getUserFromRequest(req);
     if (!user) {
       const returnUrl = buildApprovalReturnUrl(redirect_uri, state, code_challenge, code_challenge_method);
-      return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+      const loginUrl = UI_URL ? `${UI_URL}/login?returnUrl=${encodeURIComponent(returnUrl)}` : `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+      return res.redirect(302, loginUrl);
     }
   }
 
@@ -236,7 +245,8 @@ app.get("/oauth/approve-page", (req, res) => {
   const user = getUserFromRequest(req);
   if (!user) {
     const returnUrl = req.originalUrl;
-    return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    const loginUrl = UI_URL ? `${UI_URL}/login?returnUrl=${encodeURIComponent(returnUrl)}` : `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    return res.redirect(302, loginUrl);
   }
 
   const base = getBaseUrl(req);
@@ -270,7 +280,8 @@ app.post("/oauth/approve", (req, res) => {
     const user = getUserFromRequest(req);
     if (!user) {
       const returnUrl = buildApprovalReturnUrl(redirect_uri, state, code_challenge, code_challenge_method);
-      return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+      const loginUrl = UI_URL ? `${UI_URL}/login?returnUrl=${encodeURIComponent(returnUrl)}` : `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+      return res.redirect(302, loginUrl);
     }
   }
 
