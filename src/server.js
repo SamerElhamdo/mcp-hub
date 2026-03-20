@@ -124,10 +124,10 @@ function authMiddleware(req, res, next) {
       req.user = user;
       return next();
     }
-    if (req.accepts("json")) {
+    const returnUrl = encodeURIComponent(req.originalUrl || "/");
+    if (req.path.startsWith("/api")) {
       return res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
     }
-    const returnUrl = encodeURIComponent(req.originalUrl || "/");
     return res.redirect(302, `/login?returnUrl=${returnUrl}`);
   }
 
@@ -139,11 +139,11 @@ function authMiddleware(req, res, next) {
   if (validateToken(req, uiToken)) return next();
 
   res.setHeader("WWW-Authenticate", 'Basic realm="MCP Hub"');
-  if (req.accepts("json")) {
-    res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
-  } else {
-    res.status(401).send("Unauthorized");
+  const returnUrl = encodeURIComponent(req.originalUrl || "/");
+  if (req.path.startsWith("/api")) {
+    return res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
   }
+  return res.redirect(302, `/login?returnUrl=${returnUrl}`);
 }
 
 // Create Express app
