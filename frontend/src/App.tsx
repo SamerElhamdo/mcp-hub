@@ -79,14 +79,17 @@ export default function App() {
       setServers(h.servers || []);
     } catch (e) {
       const err = e as Error & { status?: number };
+      const returnUrl = encodeURIComponent(location.pathname + location.search);
       if (err.status === 401) {
-        const returnUrl = encodeURIComponent(location.pathname + location.search);
         navigate(`/login?returnUrl=${returnUrl}`);
         return;
-      } else {
-        setHealth({ state: "error" });
-        setServers([]);
       }
+      if (!getStoredUiToken()) {
+        navigate(`/login?returnUrl=${returnUrl}`);
+        return;
+      }
+      setHealth({ state: "error" });
+      setServers([]);
     }
   }, [navigate, location.pathname, location.search]);
 
