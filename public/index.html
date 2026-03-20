@@ -7,15 +7,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-zPOu_5Mi.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-Bjh2aU3F.css">
+  <script type="module" crossorigin src="/assets/index-BBBbKWVZ.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BQTviswU.css">
 </head>
 <body>
   <div id="root">
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;color:#8b949e;flex-direction:column;gap:1rem;background:#0d1117">
+    <div id="loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;color:#8b949e;flex-direction:column;gap:1rem;background:#0d1117">
       <p>جاري التحميل...</p>
       <noscript>يُرجى تفعيل JavaScript</noscript>
     </div>
   </div>
+  <script>
+    setTimeout(function(){
+      var loading=document.getElementById('loading');
+      if(loading&&loading.parentElement&&loading.parentElement.children.length===1){
+        loading.innerHTML='<p style="color:#f85149">فشل تحميل التطبيق. تحقق من الاتصال أو أعد تحميل الصفحة.</p><button onclick="location.reload()" style="padding:8px 16px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer">إعادة المحاولة</button>';
+      }
+    },5000);
+  </script>
 </body>
 </html>

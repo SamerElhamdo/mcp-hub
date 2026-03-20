@@ -14,5 +14,5 @@ export default defineConfig({
     outDir: "../public",
     emptyOutDir: true,
   },
-  base: "/",
+  base: process.env.VITE_BASE_PATH || "/",
 });
