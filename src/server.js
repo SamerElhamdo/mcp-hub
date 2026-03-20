@@ -337,12 +337,17 @@ app.use("/api", router);
 
 // Serve Web UI only when not running as backend-only (UI is separate service)
 const serveUi = process.env.MCP_HUB_SERVE_UI !== "false";
+const uiUrl = process.env.MCP_HUB_UI_URL || "";
 if (serveUi) {
   const publicPath = path.join(__dirname, "..", "public");
   app.get(["/login", "/register", "/"], (req, res) => {
     res.sendFile(path.join(publicPath, "index.html"));
   });
   app.use("/", express.static(publicPath));
+} else if (uiUrl) {
+  app.get(["/", "/login", "/register"], (req, res) => {
+    res.redirect(302, `${uiUrl.replace(/\/$/, "")}${req.originalUrl}`);
+  });
 }
 
 // Helper to determine HTTP status code from error type

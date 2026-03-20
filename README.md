@@ -189,6 +189,20 @@ mcp-hub --port 3000 --config path/to/config.json
 mcp-hub --port 3000 --config ~/.config/mcphub/global.json --config ./.mcphub/project.json
 ```
 
+### Deployment (Dokploy / UI + Backend منفصلان)
+
+عند نشر UI و Backend كخدمتين منفصلتين (مثلاً `api-mcp.whatsnow.io` و `mcp.whatsnow.io`):
+
+1. **Backend** (`mcp-hub-backend`، بورت 3000):
+   - `MCP_HUB_SERVE_UI=false` (مضبوط تلقائياً في docker-compose)
+   - `MCP_HUB_UI_URL=https://mcp.whatsnow.io` — للتوجيه و CORS
+   - `MCP_HUB_MULTI_USER=true` و `DATABASE_URL` — لتفعيل الحماية بتسجيل الدخول
+
+2. **UI** (`mcp-hub-ui`، بورت 3001):
+   - `VITE_API_URL=https://api-mcp.whatsnow.io` — **ضروري** عند البناء، وإلا ستطلب الواجهة `/api` من نفس الدومين وستفشل
+
+بدون `VITE_API_URL`، الواجهة تفتح بدون حماية لأن طلبات API تذهب للواجهة (التي لا تملك API). بدون `MCP_HUB_MULTI_USER=true` و `DATABASE_URL`، الباك اند لا يطلب تسجيل دخول.
+
 ### CLI Options
 ```bash
 Options:

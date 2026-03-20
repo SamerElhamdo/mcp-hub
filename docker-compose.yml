@@ -46,6 +46,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ui
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: mcp-hub-ui
     expose:
       - 3001
