@@ -1,5 +1,5 @@
 # انسخ .env.example إلى .env وعدّل القيم: cp .env.example .env
-# Docker Compose يقرأ .env تلقائياً للمتغيرات
+# للنشر على Dokploy: UI و Backend خدمتين منفصلتين، كل واحدة على بورت خاص
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,13 +19,16 @@ services:
       timeout: 5s
       retries: 5
 
-  mcp-hub:
-    build: .
-    container_name: mcp-hub
+  mcp-hub-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: mcp-hub-backend
     expose:
       - 3000
     environment:
       - NODE_ENV=production
+      - MCP_HUB_SERVE_UI=false
       - DATABASE_URL=postgresql://${POSTGRES_USER:-mcphub}:${POSTGRES_PASSWORD:-mcphub_secret}@postgres:5432/${POSTGRES_DB:-mcphub}
       - MCP_HUB_MULTI_USER=${MCP_HUB_MULTI_USER:-true}
       - JWT_SECRET=${JWT_SECRET:-}
@@ -36,6 +39,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  mcp-hub-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: mcp-hub-ui
+    expose:
+      - 3001
     restart: unless-stopped
 
 volumes:

@@ -1,0 +1,29 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+# Build CLI only (no UI - UI is separate service)
+RUN npm run build:backend
+
+# Production image - backend only
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+
+RUN mkdir -p /app/config
+COPY mcp-servers.json /app/config/mcp-servers.json
+
+ENV NODE_ENV=production
+ENV MCP_HUB_SERVE_UI=false
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then exec node dist/cli.js --port 3000 --database-url \"$DATABASE_URL\"; else exec node dist/cli.js --port 3000 --config /app/config/mcp-servers.json; fi"]

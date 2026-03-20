@@ -33,6 +33,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "build:ui": "cd frontend && npm install --prefer-offline --no-audit && npm run build",
+    "build:backend": "npm run clean && node scripts/build.js",
     "build": "npm run build:ui && node scripts/build.js",
     "postbuild": "chmod +x dist/cli.js",
     "test": "vitest run",

@@ -324,12 +324,15 @@ app.use(authMiddleware);
 
 app.use("/api", router);
 
-// Serve Web UI - SPA routes first so /login and /register always get index.html
-const publicPath = path.join(__dirname, "..", "public");
-app.get(["/login", "/register", "/"], (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
-});
-app.use("/", express.static(publicPath));
+// Serve Web UI only when not running as backend-only (UI is separate service)
+const serveUi = process.env.MCP_HUB_SERVE_UI !== "false";
+if (serveUi) {
+  const publicPath = path.join(__dirname, "..", "public");
+  app.get(["/login", "/register", "/"], (req, res) => {
+    res.sendFile(path.join(publicPath, "index.html"));
+  });
+  app.use("/", express.static(publicPath));
+}
 
 // Helper to determine HTTP status code from error type
 function getStatusCode(error) {
@@ -722,13 +725,14 @@ registerRoute("GET", "/events", "Subscribe to server events", async (req, res) =
   }
 });
 
-// Register MCP SSE endpoint (/mcp and /sse for clients that expect either)
-app.get(["/mcp", "/sse"], async (req, res) => {
+// Register MCP SSE endpoint (/mcp, /mcp/:userId, /sse, /sse/:userId)
+app.get(["/mcp", "/sse", "/mcp/:userId", "/sse/:userId"], async (req, res) => {
   try {
     if (!mcpServerEndpoint) {
       throw new ServerError("MCP server endpoint not initialized");
     }
-    await mcpServerEndpoint.handleSSEConnection(req, res);
+    const userId = req.params.userId;
+    await mcpServerEndpoint.handleSSEConnection(req, res, userId);
   } catch (error) {
     logger.warn(`Failed to setup MCP SSE connection: ${error.message}`)
     if (!res.headersSent) {

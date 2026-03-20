@@ -1,0 +1,18 @@
+# Build frontend
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+# VITE_API_URL: رابط الباك اند عند النشر المنفصل (مثال: https://api.example.com)
+ARG VITE_API_URL=
+ENV VITE_API_URL=${VITE_API_URL}
+RUN npm run build:ui
+
+# UI - static server (Dokploy-friendly, no nginx)
+FROM node:20-alpine
+RUN npm install -g serve
+COPY --from=builder /app/public /app/public
+WORKDIR /app/public
+EXPOSE 3001
+CMD ["serve", "-s", ".", "-l", "3001"]

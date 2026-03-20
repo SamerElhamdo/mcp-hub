@@ -1,4 +1,10 @@
-const API = "/api";
+// عند النشر المنفصل: VITE_API_URL = رابط الباك اند (مثال: https://mcp-api.example.com)
+const BACKEND_ORIGIN = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "";
+const API = (BACKEND_ORIGIN || (typeof window !== "undefined" ? window.location.origin : "")) + "/api";
+
+export function getBackendOrigin(): string {
+  return BACKEND_ORIGIN || (typeof window !== "undefined" ? window.location.origin : "");
+}
 
 const UI_TOKEN_KEY = "mcpHubUiToken";
 

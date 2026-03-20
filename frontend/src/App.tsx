@@ -25,6 +25,7 @@ import {
   api,
   getStoredUiToken,
   clearStoredUiToken,
+  getBackendOrigin,
   type ServerInfo,
   type HealthResponse,
   type ConfigResponse,
@@ -90,7 +91,8 @@ export default function App() {
   }, [navigate, location.pathname, location.search]);
 
   useEffect(() => {
-    setConnectionUrl(window.location.origin + "/mcp");
+    const base = getBackendOrigin();
+    setConnectionUrl(base + "/mcp");
   }, []);
 
   useEffect(() => {

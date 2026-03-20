@@ -470,9 +470,12 @@ export class MCPServerEndpoint {
 
 
   /**
-   * Handle SSE transport creation (GET /mcp)
+   * Handle SSE transport creation (GET /mcp or GET /mcp/:userId)
+   * @param {object} req
+   * @param {object} res
+   * @param {string} [userId] - Optional user ID for per-user connection URL
    */
-  async handleSSEConnection(req, res) {
+  async handleSSEConnection(req, res, userId) {
 
     // Create SSE transport
     const transport = new SSEServerTransport('/messages', res);
