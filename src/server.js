@@ -324,12 +324,12 @@ app.use(authMiddleware);
 
 app.use("/api", router);
 
-// Serve Web UI - resolve path for both dev (src/) and prod (dist/)
+// Serve Web UI - SPA routes first so /login and /register always get index.html
 const publicPath = path.join(__dirname, "..", "public");
-app.use("/", express.static(publicPath));
-app.get(["/login", "/register"], (req, res) => {
+app.get(["/login", "/register", "/"], (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
+app.use("/", express.static(publicPath));
 
 // Helper to determine HTTP status code from error type
 function getStatusCode(error) {
