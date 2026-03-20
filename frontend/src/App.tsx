@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,6 @@ import {
 import {
   api,
   getStoredUiToken,
-  setStoredUiToken,
   clearStoredUiToken,
   type ServerInfo,
   type HealthResponse,
@@ -49,9 +49,9 @@ function parseJsonOrDefault<T>(str: string, def: T): T {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { toasts, toast } = useToast();
-  const [needsAuth, setNeedsAuth] = useState(false);
-  const [authToken, setAuthToken] = useState("");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [servers, setServers] = useState<ServerInfo[]>([]);
   const [config, setConfig] = useState<ConfigResponse | null>(null);
@@ -73,20 +73,21 @@ export default function App() {
         api<HealthResponse>("/health"),
         api<ConfigResponse>("/config"),
       ]);
-      setNeedsAuth(false);
       setHealth(h);
       setConfig(c);
       setServers(h.servers || []);
     } catch (e) {
       const err = e as Error & { status?: number };
       if (err.status === 401) {
-        setNeedsAuth(true);
+        const returnUrl = encodeURIComponent(location.pathname + location.search);
+        navigate(`/login?returnUrl=${returnUrl}`);
+        return;
       } else {
         setHealth({ state: "error" });
         setServers([]);
       }
     }
-  }, []);
+  }, [navigate, location.pathname, location.search]);
 
   useEffect(() => {
     setConnectionUrl(window.location.origin + "/mcp");
@@ -260,58 +261,10 @@ export default function App() {
   };
 
   const toolsForServer = testServer ? (serverMap.get(testServer)?.capabilities?.tools || []) : [];
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = authToken.trim();
-    if (!token) {
-      toast("أدخل التوكن", "error");
-      return;
-    }
-    setStoredUiToken(token);
-    setAuthToken("");
-    setNeedsAuth(false);
-    loadData();
-  };
-
   const handleLogout = () => {
     clearStoredUiToken();
-    setNeedsAuth(true);
-    setHealth(null);
-    setConfig(null);
-    setServers([]);
+    navigate("/login");
   };
-
-  if (needsAuth) {
-    return (
-      <div className="max-w-md mx-auto p-6 mt-16">
-        <Card>
-          <CardHeader>
-            <CardTitle>تسجيل الدخول للواجهة</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              أدخل توكن الواجهة (MCP_HUB_UI_TOKEN) للوصول
-            </p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="uiToken">التوكن</Label>
-                <Input
-                  id="uiToken"
-                  type="password"
-                  placeholder="توكن الواجهة"
-                  value={authToken}
-                  onChange={(e) => setAuthToken(e.target.value)}
-                  autoComplete="current-password"
-                  className="mt-1"
-                />
-              </div>
-              <Button type="submit" className="w-full">دخول</Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   const statusVariant =
     health?.state === "ready"
@@ -337,7 +290,7 @@ export default function App() {
         </div>
       </header>
 
-      <Card className="mb-6">
+      <Card className="mb-6 card-hover border-border/80">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
             رابط الاتصال
@@ -360,7 +313,7 @@ export default function App() {
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
+      <Card className="mb-6 card-hover border-border/80">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
             خوادم MCP
@@ -454,7 +407,7 @@ export default function App() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="card-hover border-border/80">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
             اختبار أداة

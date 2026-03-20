@@ -29,10 +29,20 @@ import {
   getProtectedResourceMetadata,
   getAuthorizationServerMetadata,
 } from "./utils/oauth-client-auth.js";
+import {
+  initAuthSchema,
+  createUser,
+  verifyUser,
+} from "./utils/db-auth.js";
+import { createSessionToken, getUserFromToken } from "./utils/auth.js";
 
 const SERVER_ID = "mcp-hub";
 
-// Auth: paths that skip UI token check
+const useMultiUser = () =>
+  process.env.DATABASE_URL &&
+  (process.env.MCP_HUB_MULTI_USER === "true" || process.env.MCP_HUB_MULTI_USER === "1");
+
+// Auth: paths that skip UI token check (public)
 const UI_AUTH_SKIP_PATHS = [
   "/mcp", "/sse", "/messages", "/api/health", "/api/oauth/callback",
   "/.well-known/oauth-protected-resource",
@@ -41,6 +51,9 @@ const UI_AUTH_SKIP_PATHS = [
   "/oauth/token",
   "/oauth/approve",
   "/authorize", "/token", "/register",
+  "/api/auth/register", "/api/auth/login",
+  "/login", "/register",
+  "/oauth/approve-page",
 ];
 const MCP_PATHS = ["/mcp", "/sse", "/messages"];
 
@@ -70,9 +83,28 @@ function validateToken(req, token) {
   return false;
 }
 
+function parseCookie(str) {
+  const out = {};
+  (str || "").split(";").forEach((part) => {
+    const [k, v] = part.trim().split("=");
+    if (k && v) out[k] = decodeURIComponent(v);
+  });
+  return out;
+}
+
+function getUserFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  const token =
+    authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : req.headers["x-mcp-hub-session"] || parseCookie(req.headers.cookie)["mcpHubSession"];
+  return token ? getUserFromToken(token) : null;
+}
+
 function authMiddleware(req, res, next) {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   const uiToken = process.env.MCP_HUB_UI_TOKEN;
+  const multiUser = useMultiUser();
 
   // MCP endpoint: require MCP_HOST_TOKEN when set
   if (MCP_PATHS.includes(req.path)) {
@@ -82,7 +114,24 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: "Unauthorized", code: "MCP_AUTH_REQUIRED" });
   }
 
-  // UI/API: require MCP_HUB_UI_TOKEN when set
+  // Multi-user: require JWT session
+  if (multiUser) {
+    if (UI_AUTH_SKIP_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
+      return next();
+    }
+    const user = getUserFromRequest(req);
+    if (user) {
+      req.user = user;
+      return next();
+    }
+    if (req.accepts("json")) {
+      return res.status(401).json({ error: "Unauthorized", code: "AUTH_REQUIRED" });
+    }
+    const returnUrl = encodeURIComponent(req.originalUrl || "/");
+    return res.redirect(302, `/login?returnUrl=${returnUrl}`);
+  }
+
+  // Legacy: require MCP_HUB_UI_TOKEN when set
   if (!uiToken) return next();
   if (UI_AUTH_SKIP_PATHS.some((p) => req.path === p || req.path.startsWith(p + "/"))) {
     return next();
@@ -131,6 +180,13 @@ function renderApprovalPage(params) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Approve Connection</title><style>body{font-family:system-ui,sans-serif;max-width:400px;margin:2rem auto;padding:1.5rem;background:#f5f5f5}form{background:#fff;padding:1.5rem;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1)}label{display:block;margin-bottom:.5rem;font-weight:500}input[type=password]{width:100%;padding:.5rem;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}button{width:100%;margin-top:1rem;padding:.6rem;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:1rem}button:hover{background:#555}.err{color:#c00;margin-bottom:.5rem;font-size:.9rem}</style></head><body><form method="post" action="/oauth/approve"><input type="hidden" name="redirect_uri" value="${esc(redirect_uri)}"><input type="hidden" name="state" value="${esc(state)}"><input type="hidden" name="code_challenge" value="${esc(code_challenge)}"><input type="hidden" name="code_challenge_method" value="${esc(code_challenge_method)}"><label for="pw">Connection approval password</label>${error ? `<p class="err">${esc(error)}</p>` : ""}<input type="password" id="pw" name="password" placeholder="Enter password" required autofocus><button type="submit">Approve</button></form></body></html>`;
 }
 
+function buildApprovalReturnUrl(redirect_uri, state, code_challenge, code_challenge_method) {
+  const params = new URLSearchParams({ redirect_uri, code_challenge });
+  if (state) params.set("state", state);
+  if (code_challenge_method) params.set("code_challenge_method", code_challenge_method);
+  return `/oauth/approve-page?${params.toString()}`;
+}
+
 app.get("/oauth/authorize", (req, res) => {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   if (!mcpHostToken) return res.status(404).end();
@@ -144,8 +200,18 @@ app.get("/oauth/authorize", (req, res) => {
   }
 
   const approvalPassword = process.env.MCP_OAUTH_APPROVAL_PASSWORD;
+  const multiUser = useMultiUser();
+
   if (approvalPassword) {
     return res.type("html").send(renderApprovalPage({ redirect_uri, state, code_challenge, code_challenge_method }));
+  }
+
+  if (multiUser) {
+    const user = getUserFromRequest(req);
+    if (!user) {
+      const returnUrl = buildApprovalReturnUrl(redirect_uri, state, code_challenge, code_challenge_method);
+      return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    }
   }
 
   const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
@@ -155,10 +221,35 @@ app.get("/oauth/authorize", (req, res) => {
   res.redirect(302, url.toString());
 });
 
+app.get("/oauth/approve-page", (req, res) => {
+  const mcpHostToken = process.env.MCP_HOST_TOKEN;
+  if (!mcpHostToken || !useMultiUser()) return res.status(404).end();
+
+  const { redirect_uri, state, code_challenge, code_challenge_method } = req.query;
+  if (!redirect_uri || !code_challenge) {
+    return res.status(400).send("Missing redirect_uri or code_challenge");
+  }
+  if (!isRedirectUriAllowed(redirect_uri)) {
+    return res.status(400).send("Invalid redirect_uri");
+  }
+
+  const user = getUserFromRequest(req);
+  if (!user) {
+    const returnUrl = req.originalUrl;
+    return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+  }
+
+  const base = getBaseUrl(req);
+  const approveUrl = `${base}/api/oauth/approve`;
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  res.type("html").send(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>الموافقة على الاتصال</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box}body{font-family:'IBM Plex Sans Arabic',sans-serif;max-width:420px;margin:3rem auto;padding:2rem;background:linear-gradient(135deg,#0d1117 0%,#161b22 100%);color:#e6edf3;min-height:50vh;display:flex;flex-direction:column;justify-content:center;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.4)}h1{font-size:1.5rem;margin-bottom:.5rem;color:#58a6ff}p{color:#8b949e;margin-bottom:1.5rem;font-size:.95rem}form{display:flex;flex-direction:column;gap:1rem}button{padding:.75rem 1.5rem;background:#238636;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s}button:hover{background:#2ea043}.sec{background:transparent;border:1px solid #30363d;color:#8b949e}.sec:hover{background:#21262d;color:#e6edf3}</style></head><body><h1>الموافقة على الاتصال</h1><p>مرحباً، أنت مسجّل الدخول. اضغط الموافقة للسماح لـ Claude أو التطبيق بالاتصال بـ MCP Hub.</p><form id="f" method="post" action="${esc(approveUrl)}"><input type="hidden" name="redirect_uri" value="${esc(redirect_uri)}"><input type="hidden" name="state" value="${esc(state)}"><input type="hidden" name="code_challenge" value="${esc(code_challenge)}"><input type="hidden" name="code_challenge_method" value="${esc(code_challenge_method || "S256")}"><button type="submit">موافقة</button></form><script>var t=localStorage.getItem("mcpHubUiToken");if(t){var f=document.getElementById("f");var inp=document.createElement("input");inp.type="hidden";inp.name="token";inp.value=t;f.appendChild(inp)}</script></body></html>`);
+});
+
 app.post("/oauth/approve", (req, res) => {
   const mcpHostToken = process.env.MCP_HOST_TOKEN;
   const approvalPassword = process.env.MCP_OAUTH_APPROVAL_PASSWORD;
-  if (!mcpHostToken || !approvalPassword) return res.status(404).end();
+  const multiUser = useMultiUser();
+  if (!mcpHostToken) return res.status(404).end();
 
   const { redirect_uri, state, code_challenge, code_challenge_method, password } = req.body || {};
   if (!redirect_uri || !code_challenge) {
@@ -167,11 +258,20 @@ app.post("/oauth/approve", (req, res) => {
   if (!isRedirectUriAllowed(redirect_uri)) {
     return res.status(400).json({ error: "invalid_request", error_description: "redirect_uri not allowed" });
   }
-  if (password !== approvalPassword) {
-    return res.type("html").status(400).send(renderApprovalPage({
-      redirect_uri, state, code_challenge, code_challenge_method,
-      error: "Incorrect password",
-    }));
+
+  if (approvalPassword) {
+    if (password !== approvalPassword) {
+      return res.type("html").status(400).send(renderApprovalPage({
+        redirect_uri, state, code_challenge, code_challenge_method,
+        error: "Incorrect password",
+      }));
+    }
+  } else if (multiUser) {
+    const user = getUserFromRequest(req);
+    if (!user) {
+      const returnUrl = buildApprovalReturnUrl(redirect_uri, state, code_challenge, code_challenge_method);
+      return res.redirect(302, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    }
   }
 
   const code = createAuthCode(code_challenge, code_challenge_method, redirect_uri, state);
@@ -227,6 +327,9 @@ app.use("/api", router);
 // Serve Web UI - resolve path for both dev (src/) and prod (dist/)
 const publicPath = path.join(__dirname, "..", "public");
 app.use("/", express.static(publicPath));
+app.get(["/login", "/register"], (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
+});
 
 // Helper to determine HTTP status code from error type
 function getStatusCode(error) {
@@ -325,8 +428,12 @@ class ServiceManager {
     logger.info("Initializing MCP Hub");
     let configManager = null;
     if (this.databaseUrl) {
-      logger.info("Using PostgreSQL for config storage");
-      configManager = new DbConfigManager(this.databaseUrl);
+      const multiUser = useMultiUser();
+      if (multiUser) {
+        await initAuthSchema(this.databaseUrl);
+      }
+      logger.info("Using PostgreSQL for config storage", { multiUser: !!multiUser });
+      configManager = new DbConfigManager(this.databaseUrl, multiUser);
     }
     this.mcpHub = new MCPHub(this.config, {
       watch: this.watch,
@@ -530,6 +637,68 @@ class ServiceManager {
   }
 }
 
+// Auth routes (multi-user mode only, public)
+registerRoute("POST", "/auth/register", "Register new user", async (req, res) => {
+  if (!useMultiUser()) {
+    throw new ValidationError("Registration not available in single-tenant mode");
+  }
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    throw new ValidationError("email and password required");
+  }
+  const emailStr = String(email).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
+    throw new ValidationError("Invalid email format");
+  }
+  if (String(password).length < 6) {
+    throw new ValidationError("Password must be at least 6 characters");
+  }
+  try {
+    const user = await createUser(process.env.DATABASE_URL, emailStr, password);
+    const token = createSessionToken(user);
+    const isSecure = (req.get("x-forwarded-proto") || req.protocol) === "https";
+    res.setHeader(
+      "Set-Cookie",
+      `mcpHubSession=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${isSecure ? "; Secure" : ""}`
+    );
+    res.status(201).json({ token, user: { id: user.id, email: user.email } });
+  } catch (e) {
+    if (e?.code === "23505") {
+      throw new ValidationError("البريد مسجّل مسبقاً");
+    }
+    throw e;
+  }
+});
+
+registerRoute("POST", "/auth/login", "Login user", async (req, res) => {
+  if (!useMultiUser()) {
+    throw new ValidationError("Login not available in single-tenant mode");
+  }
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    throw new ValidationError("email and password required");
+  }
+  const user = await verifyUser(process.env.DATABASE_URL, email, password);
+  if (!user) {
+    throw new ValidationError("Invalid email or password");
+  }
+  const token = createSessionToken(user);
+  const isSecure = (req.get("x-forwarded-proto") || req.protocol) === "https";
+  res.setHeader(
+    "Set-Cookie",
+    `mcpHubSession=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${isSecure ? "; Secure" : ""}`
+  );
+  res.json({ token, user: { id: user.id, email: user.email } });
+});
+
+registerRoute("GET", "/auth/me", "Get current user", async (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  res.json({ user });
+});
+
 // Register SSE endpoint
 registerRoute("GET", "/events", "Subscribe to server events", async (req, res) => {
   try {
@@ -645,10 +814,16 @@ registerRoute(
   async (req, res) => {
     try {
       const configManager = serviceManager?.mcpHub?.configManager;
-      const config = configManager?.getConfig();
-      const configPaths = configManager?.configPaths;
       const useDatabase = configManager?.useDatabase;
+      const configPaths = configManager?.configPaths;
       const canEdit = useDatabase || (configPaths && configPaths.length > 0);
+
+      let config;
+      if (useMultiUser() && req.user) {
+        config = await configManager.getConfigForUser(req.user.id);
+      } else {
+        config = configManager?.getConfig() || { mcpServers: {} };
+      }
 
       res.json({
         config: config || { mcpServers: {} },
@@ -677,7 +852,11 @@ registerRoute(
       if (!canSave) {
         throw new ValidationError("Config is not file or database based; cannot save from UI");
       }
-      await configManager.saveConfig({ mcpServers });
+      if (useMultiUser() && req.user) {
+        await configManager.saveConfigForUser(req.user.id, { mcpServers });
+      } else {
+        await configManager.saveConfig({ mcpServers });
+      }
       await serviceManager.restartHub();
       res.json({
         status: "ok",

@@ -23,8 +23,18 @@
 
 body {
   font-family: var(--font-sans);
-  background: var(--color-background);
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+  background-attachment: fixed;
   color: var(--color-foreground);
   min-height: 100vh;
   line-height: 1.6;
+}
+
+/* تحسينات للبطاقات والأزرار */
+.card-hover {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card-hover:hover {
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.1);
 }

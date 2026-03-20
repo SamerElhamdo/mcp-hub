@@ -34,7 +34,7 @@ export async function api<T = unknown>(
     ...getAuthHeaders(),
     ...(opts.headers as Record<string, string>),
   };
-  const res = await fetch(API + path, { ...opts, headers });
+  const res = await fetch(API + path, { ...opts, headers, credentials: "include" });
   const data = res.ok
     ? await res.json().catch(() => ({}))
     : await res.json().catch(() => ({ error: res.statusText }));
